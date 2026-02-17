@@ -1,241 +1,172 @@
-# DORI RULE WRITING GUIDELINES (EES-BASED)
+# DORI RULE WRITING GUIDELINES — DOMAIN INVARIANT MODEL
 
-This file defines how CCR rules must be written using the DORI (Decision-Only Rule Index) model.
+This file defines how DORI rules must be written.
 
-Canonical files must strictly follow this specification.
+DORI captures DOMAIN INVARIANTS only.
+
+Not implementation.
+Not mechanics.
+Not enforcement noise.
 
 ---
 
 # PURPOSE
 
-DORI stores atomic business decisions enforced within the application in a deterministic, refactor-resistant format.
+DORI stores business invariants and state machines in a compressed, refactor-resistant format.
 
-The objective is to:
+It enables:
 
-- Preserve business intent independent of implementation
-- Enable safe feature implementation
-- Enable impact analysis before code changes
-- Prevent rule regression
-- Provide structured context to Copilot
-- Avoid full codebase rescanning for every change
+- Feature impact analysis
+- Safe refactoring
+- Behavior regression detection
+- Business-aware code generation
 
-DORI is not documentation.
-DORI is not explanation.
-DORI is a Business Decision Index.
-
----
-
-# CORE PRINCIPLES
-
-- Code is the only source of truth.
-- Rules represent enforceable decisions, not implementation.
-- One rule = one atomic business decision.
-- No narration.
-- No examples.
-- No technical commentary.
-- No duplication.
-- No implementation hints.
-- Rules must survive refactoring.
-
----
-
-# WHAT IS AN EXECUTION ENTRY SURFACE (EES)
-
-An Execution Entry Surface (EES) is any external trigger that initiates business logic.
-
-Examples:
-
-- HTTP endpoint
-- Scheduler
-- Event listener
-- Message consumer
-- CLI command
-- Background job
-- Integration handler
-- Interceptor/filter with business impact
-
-Rules are scoped to an EES.
-
-A rule must always specify the EES in which it is enforced.
+It does NOT capture low-level validations.
 
 ---
 
 # WHAT QUALIFIES AS A RULE
 
-A rule is a SINGLE enforceable business decision including:
+A rule must satisfy:
 
-- Field validation
-- Field length constraint
-- Required constraint
-- Uniqueness constraint
-- Authorization requirement
-- Conditional gating
-- Feature flag dependency
-- State initialization
-- State transition condition
-- Retry policy
-- Rate limit
-- Idempotency enforcement
-- DB-level constraint
-- External dependency condition
+If removed, domain behavior changes.
 
-If multiple decisions exist → split into multiple rules.
+Valid examples:
 
-Never merge decisions.
+- Email must be globally unique.
+- Tenant must verify email and phone before activation.
+- Account transitions from PENDING to ACTIVE after verification.
+- Payment must be successful before order confirmation.
+- Subscription cannot renew if status is CANCELLED.
+
+Invalid examples (do NOT capture):
+
+- Email trimmed before save.
+- OTP hashed before storage.
+- ID generated as 6-digit numeric string.
+- Validation runs before transaction.
+- Password hashed before persist.
+
+Those are implementation mechanics.
 
 ---
 
-# DORI FORMAT (MANDATORY)
+# DORI FORMAT (SIMPLIFIED)
 
 {
 "meta": {
 "service": "<SERVICE_NAME>",
-"version": "1.0"
-},
-"entities": {
-"<EntityName>": ["field1", "field2"]
+"version": "2.0"
 },
 "rules": [
 {
 "id": "BR-<SERVICE>-001",
 "entry": "<EES_IDENTIFIER>",
 "entity": "<EntityName>",
-"field": "<FieldName or null>",
-"type": "<RULE_TYPE>",
-"decision": "<Short semantic sentence>"
+"type": "<INVARIANT_TYPE>",
+"decision": "<Short domain-level invariant sentence>"
 }
 ]
 }
 
+EXAMPLE RULE:
+{
+"id": "BR-TENANT-005",
+"entity": "TenantRootAccount",
+"type": "STATE_MACHINE",
+"decision": "Root account initial state is ACTIVE with unverified email and phone."
+}
 ---
 
 # RULE FIELD DEFINITIONS
 
 id:
-Format → BR-<SERVICE>-<3_DIGIT_SEQUENCE>
-Sequential and deterministic within service.
+BR-<SERVICE>-<3_DIGIT_SEQUENCE>
 
 entry:
-Execution Entry Surface identifier.
-
-Examples:
-- "HTTP POST /users"
-- "SCHEDULER DailyUserSyncJob"
-- "CONSUMER UserCreatedEvent"
-- "LISTENER PaymentSuccessHandler"
-- "CLI RebuildIndexCommand"
+Execution Entry Surface.
 
 entity:
-Business entity impacted.
-
-field:
-Specific field affected.
-Use null if rule applies to entire entity.
+Primary business entity affected.
 
 type:
 Must be one of:
 
-- VALIDATION
-- UNIQUE
-- REQUIRED
-- AUTHORIZATION
-- STATE_INIT
+- INVARIANT
+- STATE_MACHINE
 - STATE_TRANSITION
-- FEATURE_FLAG
-- RATE_LIMIT
-- IDEMPOTENCY
-- EXTERNAL_CONDITION
-- CONDITIONAL_FLOW
-- RETRY_POLICY
-- DB_CONSTRAINT
+- ACTIVATION_CONDITION
+- CROSS_ENTITY_CONSTRAINT
+- ELIGIBILITY_RULE
 
 decision:
-Single sentence.
-Maximum ~20 words.
-Vector-search friendly.
+Single short domain-level statement.
+Max ~20 words.
 No implementation detail.
-
-Correct:
-"Email must be unique across all users."
-
-Incorrect:
-"Repository checks database to validate uniqueness."
+No technical wording.
 
 ---
 
-# ATOMICITY CHECK
+# ATOMICITY RULE
 
-Before finalizing a rule, verify:
+One invariant per rule.
 
-- Does it represent one enforceable decision?
-- Can it be split further?
-- Is it free from implementation detail?
-- Is it deterministic?
-- Is it independent of narration?
+Example:
 
-If unclear → split.
+Wrong:
+"Email and phone must be unique and verified before activation."
+
+Correct:
+1. Email must be unique.
+2. Phone must be unique.
+3. Email and phone must be verified before activation.
 
 ---
 
 # DEDUPLICATION RULE
 
-Two rules are duplicates if they share:
+If invariant applies across multiple entry surfaces,
+store it once per domain module, not per EES.
 
-- Same entity
-- Same field
-- Same decision meaning
-- Same Execution Entry Surface
-
-Keep only one.
+DORI represents domain truth,
+not per-endpoint duplication.
 
 ---
 
-# WHAT MUST NEVER APPEAR IN CANONICAL FILES
+# WHAT MUST NEVER APPEAR
 
 - File names
 - Class names
 - Method names
-- Line numbers
-- Error codes
-- Stack traces
-- Narration
-- Technical commentary
-- Research notes
-- TODO markers
-- Internal component references
-- Cross-service references
-
-Canonical files must contain only valid DORI JSON.
+- DB field normalization details
+- Hashing details
+- Transaction mechanics
+- Internal sequencing
+- DTO mappings
+- Implementation steps
 
 ---
 
-# SCALE PRINCIPLES
+# SCALE PRINCIPLE
 
-- One DORI file per logical module.
-- Avoid excessive file splitting.
-- Keep JSON flat.
-- No nested rule structures.
-- No cross-service coupling.
-- Deterministic rule ordering.
-- Keep decisions concise.
+DORI must remain small.
 
-DORI must remain small and query-efficient.
+If rule file grows large,
+mechanical noise is being included.
+
+Domain invariants are always fewer than mechanical validations.
 
 ---
 
-# FINAL VALIDATION CHECKLIST
+# FINAL VALIDATION CHECK
 
-Before marking complete:
+Before finalize:
 
-- All Execution Entry Surfaces processed
-- No unchecked traversal paths
-- All rules atomic
-- No duplicates
-- Valid JSON
-- No metadata leakage
-- Rule IDs sequential
-- All decisions implementation-free
-- Each rule mapped to a valid EES
+- Does every rule represent domain truth?
+- Would removing it change business behavior?
+- Is state machine fully represented?
+- Is duplication removed?
+- Is JSON minimal?
 
 Only then finalize.
 
